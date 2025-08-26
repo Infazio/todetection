@@ -5,6 +5,7 @@ class Routes {
   }
 
   static const HOME = '/home';
-  static const REGISTRATION = '/registration';
   static const RECOGNITION = '/recognition';
+  static const REGISTRATION = '/registration';
+  static const FACE_NAMING_SCREEN = '/face-naming-screen';
 }

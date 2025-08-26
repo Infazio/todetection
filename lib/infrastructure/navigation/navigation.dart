@@ -9,7 +9,7 @@ import 'routes.dart';
 
 class EnvironmentsBadge extends StatelessWidget {
   final Widget child;
-  EnvironmentsBadge({required this.child});
+  const EnvironmentsBadge({super.key, required this.child});
   @override
   Widget build(BuildContext context) {
     var env = ConfigEnvironments.getEnvironments()['env'];
@@ -40,6 +40,11 @@ class Nav {
       name: Routes.RECOGNITION,
       page: () => const RecognitionScreen(),
       binding: RecognitionControllerBinding(),
+    ),
+    GetPage(
+      name: Routes.FACE_NAMING_SCREEN,
+      page: () => const FaceNamingScreen(),
+      binding: FaceNamingControllerBinding(),
     ),
   ];
 }

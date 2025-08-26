@@ -4,14 +4,20 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 class FacePainter extends CustomPainter {
   List<Face> facesList;
   dynamic imageFile; // Ini akan menjadi ui.Image
+  Map<int, String> faceNames;
 
-  FacePainter({required this.facesList, required this.imageFile});
+  FacePainter({
+    required this.facesList,
+    required this.imageFile,
+    required this.faceNames,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     print("=== FacePainter paint called ===");
     print("imageFile is null: ${imageFile == null}");
     print("facesList length: ${facesList.length}");
+    print("faceNames: $faceNames");
     print("Canvas size: ${size.width} x ${size.height}");
 
     // Gambar image terlebih dahulu sebagai background
@@ -37,13 +43,23 @@ class FacePainter extends CustomPainter {
       // Gambar kotak wajah
       canvas.drawRect(face.boundingBox, p);
 
-      // Gambar label nomor wajah
+      // Gunakan nama custom atau default
+      String faceLabel = faceNames[i] ?? 'Face ${i + 1}';
+      print("Face $i label: '$faceLabel'");
+
+      // HITUNG font size berdasarkan ukuran wajah
+      double faceWidth = face.boundingBox.width;
+      double fontSize = (faceWidth / 7).clamp(18.0, 30.0); // Min 14, Max 24
+
       final textSpan = TextSpan(
-        text: 'Face ${i + 1}',
+        text: faceLabel,
         style: TextStyle(
           color: Colors.white,
-          fontSize: 14,
+          fontSize: fontSize, // DYNAMIC font size
           fontWeight: FontWeight.bold,
+          shadows: [
+            Shadow(blurRadius: 4, color: Colors.black54, offset: Offset(1, 1)),
+          ],
         ),
       );
 
@@ -54,26 +70,31 @@ class FacePainter extends CustomPainter {
 
       textPainter.layout();
 
-      // Background label
+      // Background label - DYNAMIC size
+      double labelHeight = fontSize + 8;
       final labelRect = Rect.fromLTWH(
         face.boundingBox.left,
-        face.boundingBox.top - 25,
-        textPainter.width + 8,
-        22,
+        face.boundingBox.top - labelHeight - 5,
+        textPainter.width + 16,
+        labelHeight,
       );
 
       canvas.drawRRect(
-        RRect.fromRectAndRadius(labelRect, Radius.circular(4)),
+        RRect.fromRectAndRadius(labelRect, Radius.circular(8)),
         labelPaint,
       );
 
       // Text label
       textPainter.paint(
         canvas,
-        Offset(face.boundingBox.left + 4, face.boundingBox.top - 22),
+        Offset(
+          face.boundingBox.left + 8,
+          face.boundingBox.top - labelHeight + 2,
+        ),
       );
+
+      print("Face $i label '$faceLabel' painted with fontSize: $fontSize");
     }
-    print("=== FacePainter paint finished ===");
   }
 
   @override

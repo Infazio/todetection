@@ -1,9 +1,15 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image/image.dart' as img;
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
+
+import '../../../infrastructure/navigation/bindings/controllers/controllers_bindings.dart';
+import '../../../infrastructure/navigation/routes.dart';
+import '../../face_naming/face_naming.screen.dart';
 
 class RegistrationController extends GetxController {
   final imagePicker = ImagePicker();
@@ -17,6 +23,8 @@ class RegistrationController extends GetxController {
   var captureStatus = 'Pilih sumber gambar'.obs;
   var faceDetails = <String>[].obs;
   var decodedImage = Rxn<ui.Image>();
+  var faceNames = <int, String>{}.obs;
+  var croppedFaceImages = <Uint8List>[].obs;
 
   @override
   void onInit() {
@@ -116,7 +124,12 @@ class RegistrationController extends GetxController {
         }
       }
 
+      // CROP wajah untuk thumbnail
+      await cropFaceImages();
+
       update();
+      //pberi nama face
+      navigateToFaceNaming(); // GANTI dari showNameInputDialog()
     } catch (e) {
       errorMessage('Error deteksi wajah: ${e.toString()}');
       captureStatus('Gagal mendeteksi wajah');
@@ -358,13 +371,116 @@ class RegistrationController extends GetxController {
         : 1000;
   }
 
+  // TAMBAH method baru untuk crop wajah
+  Future<void> cropFaceImages() async {
+    try {
+      captureStatus('Memproses thumbnail wajah...');
+      croppedFaceImages.clear();
+
+      if (imageFile.value == null) return;
+
+      final bytes = await imageFile.value!.readAsBytes();
+      final originalImage = img.decodeImage(bytes);
+
+      if (originalImage == null) return;
+
+      for (int i = 0; i < faces.length; i++) {
+        final face = faces[i];
+        final boundingBox = face.boundingBox;
+
+        // Pastikan bounding box dalam range image
+        int left = boundingBox.left.toInt().clamp(0, originalImage.width - 1);
+        int top = boundingBox.top.toInt().clamp(0, originalImage.height - 1);
+        int width = (boundingBox.width.toInt()).clamp(
+          1,
+          originalImage.width - left,
+        );
+        int height = (boundingBox.height.toInt()).clamp(
+          1,
+          originalImage.height - top,
+        );
+
+        // Crop wajah
+        final croppedFace = img.copyCrop(
+          originalImage,
+          x: left,
+          y: top,
+          width: width,
+          height: height,
+        );
+
+        // Resize ke ukuran thumbnail (120x120)
+        final thumbnail = img.copyResize(croppedFace, width: 120, height: 120);
+
+        // Convert ke bytes
+        final thumbnailBytes = Uint8List.fromList(img.encodeJpg(thumbnail));
+        croppedFaceImages.add(thumbnailBytes);
+
+        print('Cropped face ${i + 1}: ${width}x${height} -> 120x120');
+      }
+
+      captureStatus('Wajah Terdeteksi');
+    } catch (e) {
+      print('Error cropping faces: $e');
+      captureStatus('Error memproses thumbnail');
+    }
+  }
+
   void resetDetection() {
     imageFile.value = null;
     faces.clear();
     faceDetails.clear();
+    faceNames.clear();
+    croppedFaceImages.clear();
     errorMessage('');
     captureStatus('Pilih sumber gambar');
     decodedImage.value = null; // TAMBAHKAN BARIS INI
+  }
+
+  // faceNames Process
+  void navigateToFaceNaming() {
+    print("=== navigateToFaceNaming called ===");
+    print("faces.length: ${faces.length}");
+    print("croppedFaceImages.length: ${croppedFaceImages.length}");
+    print("current faceNames: $faceNames");
+
+    if (faces.isNotEmpty) {
+      Get.toNamed(
+        Routes.FACE_NAMING_SCREEN,
+        arguments: {
+          'faceCount': faces.length,
+          'initialNames': Map<int, String>.from(faceNames),
+          'croppedFaceImages': List<Uint8List>.from(croppedFaceImages),
+          'onSaveCallback': (Map<int, String> savedNames) {
+            print("=== onSaveCallback received ===");
+            print("savedNames: $savedNames");
+            print("Before assign - current faceNames: $faceNames");
+
+            faceNames.assignAll(savedNames);
+
+            print("After assign - new faceNames: $faceNames");
+
+            // Force update painter
+            update();
+            print("update() called");
+
+            // Show success message di Registration Screen
+            Get.snackbar(
+              'Sukses',
+              'Nama wajah berhasil disimpan',
+              backgroundColor: Colors.green,
+              colorText: Colors.white,
+              duration: Duration(seconds: 3), // Diperpanjang untuk testing
+              snackPosition: SnackPosition.BOTTOM,
+            );
+            print("Success snackbar shown");
+          },
+        },
+      );
+      print("Navigation to FaceNamingScreen completed");
+    } else {
+      print("ERROR: faces is empty, cannot navigate");
+    }
   }
 
   @override

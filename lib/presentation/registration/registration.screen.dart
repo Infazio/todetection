@@ -174,7 +174,11 @@ class RegistrationScreen extends GetView<RegistrationController> {
           width: image.width.toDouble(),
           height: image.height.toDouble(),
           child: CustomPaint(
-            painter: FacePainter(facesList: controller.faces, imageFile: image),
+            painter: FacePainter(
+              facesList: controller.faces,
+              imageFile: image,
+              faceNames: controller.faceNames,
+            ),
           ),
         ),
       );
