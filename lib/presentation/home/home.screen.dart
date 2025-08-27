@@ -29,7 +29,7 @@ class HomeScreen extends GetView<HomeController> {
           Container(
             margin: const EdgeInsets.only(top: 100),
             child: Image.asset(
-              "assets/images/logo.png",
+              "assets/images/icon-face.png",
               width: screenWidth - 40,
               height: screenWidth - 40,
             ),
