@@ -3,13 +3,17 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 class FacePainter extends CustomPainter {
   List<Face> facesList;
-  dynamic imageFile; // Ini akan menjadi ui.Image
+  dynamic imageFile; // ui.Image
   Map<int, String> faceNames;
+  Map<int, double>? faceConfidences; // Optional untuk registration
+  Map<int, bool>? isRecognized; // Optional untuk registration
 
   FacePainter({
     required this.facesList,
     required this.imageFile,
     required this.faceNames,
+    this.faceConfidences, // Optional
+    this.isRecognized, // Optional
   });
 
   @override
@@ -26,37 +30,51 @@ class FacePainter extends CustomPainter {
       print("Image drawn successfully");
     }
 
-    // Paint untuk kotak wajah
-    Paint p = Paint();
-    p.color = Colors.green;
-    p.style = PaintingStyle.stroke;
-    p.strokeWidth = 3;
-
-    // Paint untuk label
-    final labelPaint = Paint()..color = Colors.green[600]!;
-
     // Gambar rectangle dan label untuk setiap wajah
     for (int i = 0; i < facesList.length; i++) {
       Face face = facesList[i];
       print("Drawing face $i at ${face.boundingBox}");
 
+      // Tentukan warna berdasarkan recognition status (jika ada)
+      final bool recognized = isRecognized?[i] ?? false;
+      final Color rectColor = recognized
+          ? Colors.green
+          : (isRecognized != null ? Colors.orange : Colors.green);
+
+      // Paint untuk kotak wajah
+      Paint p = Paint();
+      p.color = rectColor;
+      p.style = PaintingStyle.stroke;
+      p.strokeWidth = 3;
+
+      // Paint untuk label
+      final labelPaint = Paint()..color = rectColor.withOpacity(0.8);
+
       // Gambar kotak wajah
       canvas.drawRect(face.boundingBox, p);
 
-      // Gunakan nama custom atau default
-      String faceLabel = faceNames[i] ?? 'Face ${i + 1}';
+      // Buat label dengan atau tanpa confidence
+      String faceLabel;
+      if (recognized && faceConfidences != null) {
+        final name = faceNames[i] ?? 'Unknown';
+        final confidence = faceConfidences![i] ?? 0.0;
+        faceLabel = '$name (${confidence.toStringAsFixed(0)}%)';
+      } else {
+        faceLabel = faceNames[i] ?? 'Face ${i + 1}';
+      }
+
       print("Face $i label: '$faceLabel'");
 
       // HITUNG font size berdasarkan ukuran wajah
       double faceWidth = face.boundingBox.width;
-      double fontSize = (faceWidth / 7).clamp(18.0, 30.0); // Min 14, Max 24
+      double fontSize = (faceWidth / 7).clamp(18.0, 30.0);
 
       final textSpan = TextSpan(
         text: faceLabel,
         style: TextStyle(
           color: Colors.white,
-          fontSize: fontSize, // DYNAMIC font size
-          fontWeight: FontWeight.bold,
+          fontSize: fontSize,
+          fontWeight: recognized ? FontWeight.bold : FontWeight.w500,
           shadows: [
             Shadow(blurRadius: 4, color: Colors.black54, offset: Offset(1, 1)),
           ],

@@ -119,9 +119,42 @@ class RecognitionScreen extends GetView<RecognitionController> {
         // Simple switch button - TOP RIGHT
         Positioned(right: 16, top: 16, child: _buildSimpleSwitchButton()),
 
+        // Recognition toggle button - TAMBAH ini
+        Positioned(left: 16, top: 16, child: _buildRecognitionToggleButton()),
         // Info overlay
         _buildInfoOverlay(),
       ],
+    );
+  }
+
+  // Recognition toggle button
+  Widget _buildRecognitionToggleButton() {
+    return Obx(
+      () => Container(
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(25),
+        ),
+        child: IconButton(
+          icon: Icon(
+            controller.isRecognitionEnabled.value
+                ? Icons.face_retouching_natural
+                : Icons.face_retouching_off,
+            color: controller.isRecognitionEnabled.value
+                ? Colors.green
+                : Colors.grey,
+            size: 24,
+          ),
+          onPressed: () {
+            if (controller.isInitialized.value) {
+              controller.toggleRecognition();
+            }
+          },
+          tooltip: controller.isRecognitionEnabled.value
+              ? 'Disable Recognition'
+              : 'Enable Recognition',
+        ),
+      ),
     );
   }
 
@@ -279,6 +312,8 @@ class RecognitionScreen extends GetView<RecognitionController> {
             imageSize: controller.imageSize,
             previewSize: controller.previewSize,
             faceNames: controller.faceNames,
+            faceConfidences: controller.faceConfidences, // TAMBAH ini
+            isRecognized: controller.isRecognized, // TAMBAH ini
             isBackCamera: controller.isBackCamera.value,
           ),
         );
@@ -329,6 +364,22 @@ class RecognitionScreen extends GetView<RecognitionController> {
               ),
             ),
 
+            SizedBox(height: 4),
+
+            // Recognition status - TAMBAH ini
+            Obx(
+              () => controller.recognitionStats.isNotEmpty
+                  ? Text(
+                      controller.recognitionStats.value,
+                      style: TextStyle(
+                        color: Colors.green.shade300,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  : SizedBox.shrink(),
+            ),
+
             SizedBox(height: 8),
 
             // Camera info
@@ -337,6 +388,19 @@ class RecognitionScreen extends GetView<RecognitionController> {
                 controller.cameraInfo.value,
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
+            ),
+
+            // Database info - TAMBAH ini
+            Obx(
+              () => controller.existingPersons.isNotEmpty
+                  ? Text(
+                      '${controller.existingPersons.length} persons in database',
+                      style: TextStyle(
+                        color: Colors.blue.shade300,
+                        fontSize: 11,
+                      ),
+                    )
+                  : SizedBox.shrink(),
             ),
           ],
         ),

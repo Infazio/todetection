@@ -6,6 +6,8 @@ class FaceOverlayPainter extends CustomPainter {
   final Size imageSize;
   final Size previewSize;
   final Map<int, String> faceNames;
+  final Map<int, double> faceConfidences; // NEW: Confidence values
+  final Map<int, bool> isRecognized; // NEW: Recognition status
   final bool isBackCamera;
 
   FaceOverlayPainter({
@@ -13,6 +15,8 @@ class FaceOverlayPainter extends CustomPainter {
     required this.imageSize,
     required this.previewSize,
     required this.faceNames,
+    required this.faceConfidences,
+    required this.isRecognized,
     this.isBackCamera = true,
   });
 
@@ -24,17 +28,22 @@ class FaceOverlayPainter extends CustomPainter {
     final scaleX = size.width / imageSize.width;
     final scaleY = size.height / imageSize.height;
 
-    // Paint for face rectangles
-    final Paint facePaint = Paint()
-      ..color = Colors.green
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0;
-
-    // Paint for labels background
-    // final Paint labelPaint = Paint()..color = Colors.green.shade300;
-
     for (int i = 0; i < faces.length; i++) {
       final face = faces[i];
+      final recognized = isRecognized[i] ?? false;
+
+      // Choose colors based on recognition status
+      final Color rectColor = recognized ? Colors.green : Colors.orange;
+      final Color labelColor = recognized ? Colors.green : Colors.orange;
+
+      // Paint for face rectangles
+      final Paint facePaint = Paint()
+        ..color = rectColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.0;
+
+      // Paint for labels background
+      final Paint labelPaint = Paint()..color = labelColor.withOpacity(0.8);
 
       // Transform face bounding box to preview coordinates
       final transformedRect = _transformRect(
@@ -47,11 +56,18 @@ class FaceOverlayPainter extends CustomPainter {
       // Draw face rectangle
       canvas.drawRect(transformedRect, facePaint);
 
-      // Get face label (name or default)
-      final String label = faceNames[i] ?? 'Face ${i + 1}';
+      // Get face label with confidence
+      String label;
+      if (recognized) {
+        final name = faceNames[i] ?? 'Unknown';
+        final confidence = faceConfidences[i] ?? 0.0;
+        label = '$name (${confidence.toStringAsFixed(0)}%)';
+      } else {
+        label = faceNames[i] ?? 'Face ${i + 1}';
+      }
 
       // Draw label
-      _drawLabel(canvas, label, transformedRect);
+      _drawLabel(canvas, label, transformedRect, labelPaint, recognized);
     }
   }
 
@@ -80,8 +96,14 @@ class FaceOverlayPainter extends CustomPainter {
     return Rect.fromLTRB(left, top, right, bottom);
   }
 
-  // Draw label with background
-  void _drawLabel(Canvas canvas, String label, Rect faceRect) {
+  // Draw label with background - ENHANCED with recognition styling
+  void _drawLabel(
+    Canvas canvas,
+    String label,
+    Rect faceRect,
+    Paint labelPaint,
+    bool recognized,
+  ) {
     // Calculate font size based on face size
     final faceWidth = faceRect.width;
     final fontSize = (faceWidth / 8).clamp(14.0, 24.0);
@@ -91,7 +113,9 @@ class FaceOverlayPainter extends CustomPainter {
       style: TextStyle(
         color: Colors.white,
         fontSize: fontSize,
-        fontWeight: FontWeight.bold,
+        fontWeight: recognized
+            ? FontWeight.bold
+            : FontWeight.w500, // Bold for recognized
         shadows: [
           Shadow(blurRadius: 4, color: Colors.black54, offset: Offset(1, 1)),
         ],
@@ -116,10 +140,10 @@ class FaceOverlayPainter extends CustomPainter {
       labelHeight,
     );
 
-    // Draw label background
+    // Draw label background with rounded corners
     canvas.drawRRect(
       RRect.fromRectAndRadius(labelRect, Radius.circular(8)),
-      Paint()..color = Colors.cyan,
+      labelPaint,
     );
 
     // Draw text

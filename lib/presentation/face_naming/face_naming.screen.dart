@@ -66,7 +66,7 @@ class FaceNamingScreen extends GetView<FaceNamingController> {
           Icon(
             Icons.face_retouching_natural,
             size: 40,
-            color: Colors.blue[800],
+            color: Colors.teal[600],
           ),
           SizedBox(height: 8),
           Text(
