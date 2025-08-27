@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
-import '../../widget/facepainter.dart';
+import '../../widgets/facepainter.dart';
 import 'controllers/registration.controller.dart';
 
 class RegistrationScreen extends GetView<RegistrationController> {
@@ -167,7 +167,9 @@ class RegistrationScreen extends GetView<RegistrationController> {
           width: image.width.toDouble(),
           height: image.height.toDouble(),
           child: CustomPaint(
-            key: ValueKey(controller.faceNames.length), // FIX: Force rebuild
+            key: ValueKey(
+              '${controller.faceNames.length}_${controller.faceNames.hashCode}',
+            ),
             painter: FacePainter(
               facesList: controller.faces,
               imageFile: image,

@@ -25,6 +25,9 @@ class FaceNamingController extends GetxController {
   // Current face names
   Map<int, String> faceNames = {};
 
+  //untuk callback
+  Function(Map<int, String>)? onCancelCallback;
+
   //variable ini di class FaceNamingController (setelah variable yang sudah ada)
   final PersonRepository personRepository = PersonRepository();
   var isLoadingFromDatabase = false.obs;
@@ -64,6 +67,9 @@ class FaceNamingController extends GetxController {
 
     // Load data dan perform matching
     _initializeFaceMatching();
+
+    //untuk callback
+    onCancelCallback = args['onCancelCallback'];
   }
 
   void _initializeTextControllers() {
@@ -425,6 +431,15 @@ class FaceNamingController extends GetxController {
     } catch (e) {
       print("Error in face matching initialization: $e");
     }
+  }
+
+  //untuk callback
+  void handleBackButton() {
+    // Kirim current faceNames (termasuk yang hasil matching) ke parent
+    if (onCancelCallback != null) {
+      onCancelCallback!(Map<int, String>.from(faceNames));
+    }
+    Get.back();
   }
 
   @override

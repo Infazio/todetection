@@ -426,7 +426,7 @@ class RegistrationController extends GetxController {
         final thumbnailBytes = Uint8List.fromList(img.encodeJpg(thumbnail));
         croppedFaceImages.add(thumbnailBytes);
 
-        print('Cropped face ${i + 1}: ${width}x${height} -> 120x120');
+        print('Cropped face ${i + 1}: ${width}x$height -> 120x120');
       }
 
       captureStatus('Wajah Terdeteksi');
@@ -472,6 +472,10 @@ class RegistrationController extends GetxController {
               snackPosition: SnackPosition.BOTTOM,
             );
             print("Success snackbar shown");
+          },
+          'onCancelCallback': (Map<int, String> currentNames) {
+            faceNames.assignAll(currentNames);
+            update(); // Force update FacePainter
           },
         },
       );

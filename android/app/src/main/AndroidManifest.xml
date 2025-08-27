@@ -1,8 +1,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-   <uses-permission android:name="android.permission.INTERNET"/>
+   <!-- Internet -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    
+    <!-- Storage (existing) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <application
+    
+    <!-- CAMERA PERMISSIONS - TAMBAH INI! -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    
+    <!-- Camera features -->
+    <uses-feature 
+        android:name="android.hardware.camera" 
+        android:required="true" />
+    <uses-feature 
+        android:name="android.hardware.camera.front" 
+        android:required="false" />
+    <uses-feature 
+        android:name="android.hardware.camera.autofocus" 
+        android:required="false" />
+    
+    <!-- Optional: Untuk Android 13+ (API 33+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /><application
         android:label="todetection"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"

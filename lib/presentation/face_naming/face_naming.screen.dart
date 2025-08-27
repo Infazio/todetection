@@ -8,37 +8,45 @@ class FaceNamingScreen extends GetView<FaceNamingController> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Beri Nama Wajah'),
-        backgroundColor: Colors.blue[800],
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.info_outline),
-            onPressed: controller.showDatabaseStats,
-            tooltip: 'Database Info',
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Info header
-            _buildInfoHeader(),
-
-            SizedBox(height: 20),
-
-            // List input nama dengan thumbnail
-            Expanded(child: _buildFaceNamesList()),
-
-            // Bottom buttons
-            _buildBottomButtons(),
-
-            SizedBox(height: 16),
+    return PopScope(
+      canPop: false, // Prevent default pop behavior
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          controller.handleBackButton();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Beri Nama Wajah'),
+          backgroundColor: Colors.blue[800],
+          foregroundColor: Colors.white,
+          elevation: 0,
+          actions: [
+            IconButton(
+              icon: Icon(Icons.info_outline),
+              onPressed: controller.showDatabaseStats,
+              tooltip: 'Database Info',
+            ),
           ],
+        ),
+        body: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // Info header
+              _buildInfoHeader(),
+
+              SizedBox(height: 20),
+
+              // List input nama dengan thumbnail
+              Expanded(child: _buildFaceNamesList()),
+
+              // Bottom buttons
+              _buildBottomButtons(),
+
+              SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -267,9 +275,7 @@ class FaceNamingScreen extends GetView<FaceNamingController> {
         children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: () {
-                Get.back();
-              },
+              onPressed: controller.handleBackButton,
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.grey[700],
                 side: BorderSide(color: Colors.grey[400]!),
