@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../data/repositories/person_repositories.dart';
 import '../../../infrastructure/navigation/routes.dart';
+import '../../../services/face_recognition_service.dart';
 
 class FaceNamingController extends GetxController {
   // Data yang diterima dari screen sebelumnya
@@ -12,12 +14,21 @@ class FaceNamingController extends GetxController {
   Map<int, String> initialNames = {};
   Function(Map<int, String>)? onSaveCallback;
   List<Uint8List> croppedFaceImages = []; // TAMBAH ini untuk thumbnails
+  final FaceRecognitionService _faceRecognitionService =
+      FaceRecognitionService();
+  var faceMatchResults = <Map<String, dynamic>>[].obs;
+  var isMatchingFaces = false.obs;
 
   // Text controllers untuk setiap input field
   List<TextEditingController> textControllers = [];
 
   // Current face names
   Map<int, String> faceNames = {};
+
+  //variable ini di class FaceNamingController (setelah variable yang sudah ada)
+  final PersonRepository personRepository = PersonRepository();
+  var isLoadingFromDatabase = false.obs;
+  var existingPersons = <Map<String, dynamic>>[].obs;
 
   @override
   void onInit() {
@@ -36,9 +47,23 @@ class FaceNamingController extends GetxController {
     // Set initial names
     faceNames = Map<int, String>.from(initialNames);
 
+    // TAMBAH: Load existing persons from database
+    loadExistingPersons().then((_) {
+      // TAMBAH: Perform face matching setelah load database
+      if (croppedFaceImages.isNotEmpty &&
+          _faceRecognitionService.isModelLoaded) {
+        Future.delayed(Duration(milliseconds: 500), () {
+          performFaceMatching();
+        });
+      }
+    });
+
     print('FaceNamingController initialized:');
     print('- Face count: $faceCount');
     print('- Cropped images: ${croppedFaceImages.length}');
+
+    // Load data dan perform matching
+    _initializeFaceMatching();
   }
 
   void _initializeTextControllers() {
@@ -69,6 +94,18 @@ class FaceNamingController extends GetxController {
   void updateFaceName(int index, String name) {
     if (name.isNotEmpty) {
       faceNames[index] = name;
+
+      // Show warning if name already exists
+      if (isNameExists(name)) {
+        Get.snackbar(
+          'Peringatan',
+          'Nama "$name" sudah ada di database',
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          duration: Duration(seconds: 2),
+          snackPosition: SnackPosition.TOP,
+        );
+      }
     } else {
       faceNames.remove(index);
     }
@@ -170,6 +207,224 @@ class FaceNamingController extends GetxController {
         ],
       ),
     );
+  }
+
+  Future<void> loadExistingPersons() async {
+    try {
+      isLoadingFromDatabase(true);
+      print("=== DEBUG: Loading existing persons ===");
+
+      final persons = await personRepository.getAllPersonsWithEmbeddings();
+      existingPersons.assignAll(persons);
+
+      print("Loaded ${persons.length} persons from database");
+      for (final person in persons) {
+        print("- ${person['name']} (ID: ${person['id']})");
+        print("  Embedding length: ${person['embedding'].length}");
+      }
+    } catch (e) {
+      print("ERROR loading existing persons: $e");
+    } finally {
+      isLoadingFromDatabase(false);
+    }
+  }
+
+  // TAMBAHKAN method untuk check if name already exists
+  bool isNameExists(String name) {
+    return existingPersons.any(
+      (person) => person['name'].toString().toLowerCase() == name.toLowerCase(),
+    );
+  }
+
+  // TAMBAHKAN method untuk get suggestions
+  List<String> getNameSuggestions(String partial) {
+    if (partial.isEmpty) return [];
+
+    return existingPersons
+        .map<String>((person) => person['name'].toString())
+        .where((name) => name.toLowerCase().contains(partial.toLowerCase()))
+        .take(3)
+        .toList();
+  }
+
+  //show  database statistics
+  void showDatabaseStats() {
+    Get.dialog(
+      AlertDialog(
+        title: Text('Database Statistics'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Obx(() => Text('Total Persons: ${existingPersons.length}')),
+            SizedBox(height: 10),
+            if (existingPersons.isNotEmpty) ...[
+              Text(
+                'Recent Names:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 5),
+              ...existingPersons
+                  .take(5)
+                  .map((person) => Text('• ${person['name']}')),
+            ],
+          ],
+        ),
+        actions: [TextButton(onPressed: () => Get.back(), child: Text('OK'))],
+      ),
+    );
+  }
+
+  // TAMBAHKAN method untuk face matching
+  Future<void> performFaceMatching() async {
+    print("=== DEBUG: performFaceMatching called ===");
+    print("croppedFaceImages.length: ${croppedFaceImages.length}");
+    print("existingPersons.length: ${existingPersons.length}");
+    print("Model loaded: ${_faceRecognitionService.isModelLoaded}");
+    if (croppedFaceImages.isEmpty) {
+      print("No cropped faces to match");
+      return;
+    }
+
+    try {
+      isMatchingFaces(true);
+      faceMatchResults.clear();
+
+      print("Starting face matching for ${croppedFaceImages.length} faces...");
+
+      for (int i = 0; i < croppedFaceImages.length; i++) {
+        print("Matching face ${i + 1}/${croppedFaceImages.length}...");
+
+        // Generate embedding untuk face yang dideteksi
+        final currentEmbedding = await _faceRecognitionService
+            .generateEmbedding(croppedFaceImages[i]);
+
+        if (currentEmbedding == null) {
+          print("Failed to generate embedding for face ${i + 1}");
+          faceMatchResults.add({
+            'faceIndex': i,
+            'matchFound': false,
+            'suggestedName': '',
+            'confidence': 0.0,
+          });
+          continue;
+        }
+
+        // Compare dengan semua person di database
+        double bestSimilarity = 0.0;
+        String bestMatchName = '';
+        int bestMatchId = -1;
+
+        for (final person in existingPersons) {
+          final storedEmbedding = person['embedding'] as List<double>;
+
+          if (storedEmbedding.isNotEmpty) {
+            final similarity = _faceRecognitionService.calculateSimilarity(
+              currentEmbedding,
+              storedEmbedding,
+            );
+
+            if (similarity > bestSimilarity) {
+              bestSimilarity = similarity;
+              bestMatchName = person['name'];
+              bestMatchId = person['id'];
+            }
+          }
+        }
+
+        // Convert similarity to percentage
+        final confidencePercentage = _faceRecognitionService
+            .similarityToPercentage(bestSimilarity);
+        final threshold = 70.0; // 70% confidence threshold
+
+        final matchResult = {
+          'faceIndex': i,
+          'matchFound': confidencePercentage >= threshold,
+          'suggestedName': bestMatchName,
+          'confidence': confidencePercentage,
+          'similarity': bestSimilarity,
+          'matchId': bestMatchId,
+        };
+
+        faceMatchResults.add(matchResult);
+
+        print("Face ${i + 1} matching result:");
+        print("  Best match: $bestMatchName");
+        print("  Confidence: ${confidencePercentage.toStringAsFixed(1)}%");
+        print("  Match found: ${confidencePercentage >= threshold}");
+
+        // Auto-fill jika match ditemukan
+        if (confidencePercentage >= threshold && bestMatchName.isNotEmpty) {
+          textControllers[i].text = bestMatchName;
+          faceNames[i] = bestMatchName;
+          print("  Auto-filled name: $bestMatchName");
+        }
+      }
+
+      print("Face matching completed!");
+      _showMatchingResults();
+    } catch (e) {
+      print("Error during face matching: $e");
+    } finally {
+      isMatchingFaces(false);
+    }
+  }
+
+  // TAMBAHKAN method untuk show matching results
+  void _showMatchingResults() {
+    final matchedFaces = faceMatchResults
+        .where((result) => result['matchFound'] == true)
+        .length;
+    final totalFaces = faceMatchResults.length;
+
+    if (matchedFaces > 0) {
+      Get.snackbar(
+        'Face Recognition',
+        '$matchedFaces dari $totalFaces wajah berhasil dikenali',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: Duration(seconds: 3),
+      );
+    } else {
+      Get.snackbar(
+        'Face Recognition',
+        'Tidak ada wajah yang dikenali. Semua wajah baru.',
+        backgroundColor: Colors.blue,
+        colorText: Colors.white,
+        duration: Duration(seconds: 3),
+      );
+    }
+  }
+
+  //initial faxe matching
+  Future<void> _initializeFaceMatching() async {
+    try {
+      print("=== _initializeFaceMatching started ===");
+
+      // 1. Load existing persons first
+      await loadExistingPersons();
+
+      // 2. Check if model is loaded
+      if (!_faceRecognitionService.isModelLoaded) {
+        print("TFLite model not loaded, trying to load...");
+        await _faceRecognitionService.loadModel();
+      }
+
+      print("Ready for face matching:");
+      print("- Model loaded: ${_faceRecognitionService.isModelLoaded}");
+      print("- Existing persons: ${existingPersons.length}");
+      print("- Cropped images: ${croppedFaceImages.length}");
+
+      // 3. Perform face matching
+      if (croppedFaceImages.isNotEmpty && existingPersons.isNotEmpty) {
+        print("Starting face matching...");
+        await performFaceMatching();
+      } else {
+        print("Skip face matching - no faces or no existing persons");
+      }
+    } catch (e) {
+      print("Error in face matching initialization: $e");
+    }
   }
 
   @override

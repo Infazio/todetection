@@ -14,6 +14,13 @@ class FaceNamingScreen extends GetView<FaceNamingController> {
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.info_outline),
+            onPressed: controller.showDatabaseStats,
+            tooltip: 'Database Info',
+          ),
+        ],
       ),
       body: Padding(
         padding: EdgeInsets.all(16),
@@ -189,6 +196,10 @@ class FaceNamingScreen extends GetView<FaceNamingController> {
           ),
         ),
         SizedBox(height: 8),
+
+        // HILANGKAN Obx, buat widget biasa
+        _buildSuggestionChips(index),
+
         TextField(
           controller: controller.getTextController(index),
           decoration: InputDecoration(
@@ -208,6 +219,7 @@ class FaceNamingScreen extends GetView<FaceNamingController> {
             ),
             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             prefixIcon: Icon(Icons.person_outline, color: Colors.grey[400]),
+            // HILANGKAN suffixIcon Obx - buat static
           ),
           onChanged: (value) {
             controller.updateFaceName(index, value.trim());
@@ -217,8 +229,39 @@ class FaceNamingScreen extends GetView<FaceNamingController> {
     );
   }
 
+  // TAMBAH method helper TANPA Obx:
+  Widget _buildSuggestionChips(int index) {
+    final currentText = controller.getTextController(index).text;
+    final suggestions = controller.getNameSuggestions(currentText);
+
+    if (suggestions.isNotEmpty && currentText.isNotEmpty) {
+      return Container(
+        margin: EdgeInsets.only(bottom: 8),
+        child: Wrap(
+          spacing: 8,
+          children: suggestions
+              .map(
+                (suggestion) => GestureDetector(
+                  onTap: () {
+                    controller.getTextController(index).text = suggestion;
+                    controller.updateFaceName(index, suggestion);
+                  },
+                  child: Chip(
+                    label: Text(suggestion, style: TextStyle(fontSize: 12)),
+                    backgroundColor: Colors.blue[50],
+                    side: BorderSide(color: Colors.blue[200]!),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      );
+    }
+    return SizedBox.shrink();
+  }
+
   Widget _buildBottomButtons() {
-    return Container(
+    return SizedBox(
       width: double.infinity,
       child: Row(
         children: [

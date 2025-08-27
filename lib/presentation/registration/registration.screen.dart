@@ -142,16 +142,10 @@ class RegistrationScreen extends GetView<RegistrationController> {
     });
   }
 
+  // GANTI _buildImageWithPainter di RegistrationScreen:
   Widget _buildImageWithPainter(double containerWidth, double containerHeight) {
     return Obx(() {
-      print("Building painter widget...");
-      print(
-        "decodedImage.value is null: ${controller.decodedImage.value == null}",
-      );
-      print("faces count: ${controller.faces.length}");
-
       if (controller.decodedImage.value == null) {
-        print("Showing loading indicator");
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -167,17 +161,19 @@ class RegistrationScreen extends GetView<RegistrationController> {
       }
 
       final image = controller.decodedImage.value!;
-      print("Image ready - dimensions: ${image.width} x ${image.height}");
 
       return FittedBox(
         child: SizedBox(
           width: image.width.toDouble(),
           height: image.height.toDouble(),
           child: CustomPaint(
+            key: ValueKey(controller.faceNames.length), // FIX: Force rebuild
             painter: FacePainter(
               facesList: controller.faces,
               imageFile: image,
-              faceNames: controller.faceNames,
+              faceNames: Map<int, String>.from(
+                controller.faceNames,
+              ), // FIX: Create new map
             ),
           ),
         ),

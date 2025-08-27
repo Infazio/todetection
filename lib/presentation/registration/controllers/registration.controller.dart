@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -7,13 +8,16 @@ import 'package:image/image.dart' as img;
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../infrastructure/navigation/bindings/controllers/controllers_bindings.dart';
+import '../../../data/repositories/person_repositories.dart';
 import '../../../infrastructure/navigation/routes.dart';
-import '../../face_naming/face_naming.screen.dart';
+import '../../../services/face_recognition_service.dart';
 
 class RegistrationController extends GetxController {
   final imagePicker = ImagePicker();
   late final FaceDetector faceDetector;
+  final PersonRepository personRepository = PersonRepository();
+  final FaceRecognitionService _faceRecognitionService =
+      FaceRecognitionService();
 
   // Reactive variables
   var imageFile = Rxn<File>();
@@ -25,6 +29,9 @@ class RegistrationController extends GetxController {
   var decodedImage = Rxn<ui.Image>();
   var faceNames = <int, String>{}.obs;
   var croppedFaceImages = <Uint8List>[].obs;
+  var isSavingToDatabase = false.obs;
+  var realEmbeddings = <List<double>>[].obs;
+  var isGeneratingEmbeddings = false.obs;
 
   @override
   void onInit() {
@@ -37,6 +44,9 @@ class RegistrationController extends GetxController {
       enableTracking: true,
     );
     faceDetector = FaceDetector(options: options);
+
+    //Load TFLite model
+    _loadFaceRecognitionModel();
   }
 
   Future<void> imgFromCamera() async {
@@ -438,12 +448,7 @@ class RegistrationController extends GetxController {
   }
 
   // faceNames Process
-  void navigateToFaceNaming() {
-    print("=== navigateToFaceNaming called ===");
-    print("faces.length: ${faces.length}");
-    print("croppedFaceImages.length: ${croppedFaceImages.length}");
-    print("current faceNames: $faceNames");
-
+  void navigateToFaceNaming() async {
     if (faces.isNotEmpty) {
       Get.toNamed(
         Routes.FACE_NAMING_SCREEN,
@@ -451,20 +456,13 @@ class RegistrationController extends GetxController {
           'faceCount': faces.length,
           'initialNames': Map<int, String>.from(faceNames),
           'croppedFaceImages': List<Uint8List>.from(croppedFaceImages),
-          'onSaveCallback': (Map<int, String> savedNames) {
-            print("=== onSaveCallback received ===");
-            print("savedNames: $savedNames");
-            print("Before assign - current faceNames: $faceNames");
-
+          'onSaveCallback': (Map<int, String> savedNames) async {
             faceNames.assignAll(savedNames);
-
-            print("After assign - new faceNames: $faceNames");
-
             // Force update painter
             update();
-            print("update() called");
 
-            // Show success message di Registration Screen
+            //Save to database after UI update
+            await savePersonsToDatabase();
             Get.snackbar(
               'Sukses',
               'Nama wajah berhasil disimpan',
@@ -483,9 +481,124 @@ class RegistrationController extends GetxController {
     }
   }
 
+  Future<void> savePersonsToDatabase() async {
+    if (faceNames.isEmpty) {
+      print("No face names to save");
+      return;
+    }
+
+    try {
+      isSavingToDatabase(true);
+      isGeneratingEmbeddings(true);
+      captureStatus('Generating embeddings...');
+
+      // Generate real embeddings untuk setiap wajah
+      realEmbeddings.clear();
+      for (int i = 0; i < faces.length; i++) {
+        if (i < croppedFaceImages.length) {
+          final embedding = await generateRealEmbedding(croppedFaceImages[i]);
+          realEmbeddings.add(embedding);
+          print("Generated embedding for face ${i + 1}");
+        }
+      }
+
+      captureStatus('Menyimpan ke database...');
+
+      for (int i = 0; i < faces.length; i++) {
+        final name = faceNames[i];
+        if (name != null && name.isNotEmpty && i < realEmbeddings.length) {
+          // Save to database dengan real embedding
+          final personId = await personRepository.savePerson(
+            name: name,
+            embedding: realEmbeddings[i],
+            confidenceThreshold: 0.7,
+          );
+
+          print("Person '$name' saved with real embedding (ID: $personId)");
+        }
+      }
+
+      captureStatus('Berhasil disimpan ke database');
+
+      Get.snackbar(
+        'Database',
+        '${realEmbeddings.length} wajah berhasil disimpan dengan embedding',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: Duration(seconds: 3),
+        snackPosition: SnackPosition.TOP,
+      );
+    } catch (e) {
+      print("Error saving to database: $e");
+      captureStatus('Gagal menyimpan ke database');
+
+      Get.snackbar(
+        'Error Database',
+        'Gagal menyimpan: ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: Duration(seconds: 3),
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isSavingToDatabase(false);
+      isGeneratingEmbeddings(false);
+    }
+  }
+
+  // method helper untuk generate dummy embedding (temporary)
+  Future<List<double>> generateRealEmbedding(Uint8List croppedFaceBytes) async {
+    try {
+      if (!_faceRecognitionService.isModelLoaded) {
+        print("Model not loaded, using dummy embedding");
+        return _generateDummyEmbedding();
+      }
+
+      final embedding = await _faceRecognitionService.generateEmbedding(
+        croppedFaceBytes,
+      );
+
+      if (embedding != null && embedding.isNotEmpty) {
+        print("Generated real embedding with ${embedding.length} dimensions");
+        return embedding;
+      } else {
+        print("Failed to generate real embedding, using dummy");
+        return _generateDummyEmbedding();
+      }
+    } catch (e) {
+      print("Error generating real embedding: $e");
+      return _generateDummyEmbedding();
+    }
+  }
+
+  // Dummy embedding generator (fallback when TFLite fails)
+  List<double> _generateDummyEmbedding() {
+    Random random = Random();
+    return List.generate(192, (index) => random.nextDouble() * 2 - 1);
+  }
+
+  // method untuk load TFLite model
+  Future<void> _loadFaceRecognitionModel() async {
+    try {
+      print("Loading TFLite model...");
+      final success = await _faceRecognitionService.loadModel();
+
+      if (success) {
+        print("✅ MobileFaceNet model loaded successfully");
+        final modelInfo = _faceRecognitionService.getModelInfo();
+        print("Model info: $modelInfo");
+      } else {
+        print("❌ Failed to load MobileFaceNet model");
+      }
+    } catch (e) {
+      print("Error loading TFLite model: $e");
+    }
+  }
+
   @override
   void onClose() {
     faceDetector.close();
+    _faceRecognitionService.dispose();
     super.onClose();
   }
 }

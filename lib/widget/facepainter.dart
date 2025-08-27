@@ -33,7 +33,7 @@ class FacePainter extends CustomPainter {
     p.strokeWidth = 3;
 
     // Paint untuk label
-    final labelPaint = Paint()..color = Colors.green.withOpacity(0.8);
+    final labelPaint = Paint()..color = Colors.green[600]!;
 
     // Gambar rectangle dan label untuk setiap wajah
     for (int i = 0; i < facesList.length; i++) {
@@ -71,11 +71,11 @@ class FacePainter extends CustomPainter {
       textPainter.layout();
 
       // Background label - DYNAMIC size
-      double labelHeight = fontSize + 8;
+      double labelHeight = fontSize + 2;
       final labelRect = Rect.fromLTWH(
         face.boundingBox.left,
-        face.boundingBox.top - labelHeight - 5,
-        textPainter.width + 16,
+        face.boundingBox.top - labelHeight - 2,
+        textPainter.width + 2,
         labelHeight,
       );
 
@@ -88,7 +88,7 @@ class FacePainter extends CustomPainter {
       textPainter.paint(
         canvas,
         Offset(
-          face.boundingBox.left + 8,
+          face.boundingBox.left + 5,
           face.boundingBox.top - labelHeight + 2,
         ),
       );
