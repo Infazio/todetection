@@ -7,6 +7,8 @@ import 'package:get/get.dart';
 import '../../../data/repositories/person_repositories.dart';
 import '../../../infrastructure/navigation/routes.dart';
 import '../../../services/face_recognition_service.dart';
+import '../../../utils/snackbar_helper.dart';
+import '../../../widgets/database_info_dialog.dart';
 
 class FaceNamingController extends GetxController {
   // Data yang diterima dari screen sebelumnya
@@ -32,6 +34,10 @@ class FaceNamingController extends GetxController {
   final PersonRepository personRepository = PersonRepository();
   var isLoadingFromDatabase = false.obs;
   var existingPersons = <Map<String, dynamic>>[].obs;
+  var isSavingToDatabase = false.obs;
+  var isGeneratingEmbeddings = false.obs;
+  var realEmbeddings = <List<double>>[].obs;
+  var nameWarnings = <int, String>{}.obs;
 
   @override
   void onInit() {
@@ -101,16 +107,10 @@ class FaceNamingController extends GetxController {
     if (name.isNotEmpty) {
       faceNames[index] = name;
 
-      // Show warning if name already exists
+      // Warning logic - tapi kurangi noise
       if (isNameExists(name)) {
-        Get.snackbar(
-          'Peringatan',
-          'Nama "$name" sudah ada di database',
-          backgroundColor: Colors.orange,
-          colorText: Colors.white,
-          duration: Duration(seconds: 2),
-          snackPosition: SnackPosition.TOP,
-        );
+        // GANTI dari Get.snackbar jadi warning yang lebih soft:
+        SnackbarHelper.showWarning('This name already exists in database');
       }
     } else {
       faceNames.remove(index);
@@ -157,23 +157,12 @@ class FaceNamingController extends GetxController {
   }
 
   void _performSave() {
-    print("=== _performSave called ===");
-    print("onSaveCallback is null: ${onSaveCallback == null}");
-    print("faceNames to save: $faceNames");
-
-    // Panggil callback untuk update parent controller
     if (onSaveCallback != null) {
-      print("Calling onSaveCallback with: $faceNames");
       onSaveCallback!(Map<int, String>.from(faceNames));
-      print("onSaveCallback completed");
-    } else {
-      print("ERROR: onSaveCallback is null!");
     }
 
-    print("Calling Get.back()");
-    // Kembali ke Registration Screen
+    // HAPUS snackbar di sini karena sudah ada di registration controller
     Get.offNamed(Routes.REGISTRATION);
-    print("Get.back() completed");
   }
 
   void _showEmptyNamesDialog(List<int> emptyIndices) {
@@ -255,28 +244,11 @@ class FaceNamingController extends GetxController {
 
   //show  database statistics
   void showDatabaseStats() {
-    Get.dialog(
-      AlertDialog(
-        title: Text('Database Statistics'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Obx(() => Text('Total Persons: ${existingPersons.length}')),
-            SizedBox(height: 10),
-            if (existingPersons.isNotEmpty) ...[
-              Text(
-                'Recent Names:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 5),
-              ...existingPersons
-                  .take(5)
-                  .map((person) => Text('• ${person['name']}')),
-            ],
-          ],
-        ),
-        actions: [TextButton(onPressed: () => Get.back(), child: Text('OK'))],
+    showDialog(
+      context: Get.context!,
+      builder: (context) => DatabaseInfoDialog(
+        existingPersons: existingPersons,
+        faceMatchResults: faceMatchResults,
       ),
     );
   }
@@ -383,23 +355,14 @@ class FaceNamingController extends GetxController {
         .length;
     final totalFaces = faceMatchResults.length;
 
+    // Hanya tampilkan jika ada yang match - kurangi noise
     if (matchedFaces > 0) {
-      Get.snackbar(
-        'Face Recognition',
-        '$matchedFaces dari $totalFaces wajah berhasil dikenali',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        duration: Duration(seconds: 3),
-      );
-    } else {
-      Get.snackbar(
-        'Face Recognition',
-        'Tidak ada wajah yang dikenali. Semua wajah baru.',
-        backgroundColor: Colors.blue,
-        colorText: Colors.white,
-        duration: Duration(seconds: 3),
+      SnackbarHelper.showSuccess(
+        '$matchedFaces of $totalFaces faces recognized automatically',
+        title: 'Face Recognition',
       );
     }
+    // HAPUS snackbar untuk "no faces recognized" - terlalu noisy
   }
 
   //initial faxe matching

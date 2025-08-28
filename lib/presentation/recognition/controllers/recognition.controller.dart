@@ -10,6 +10,7 @@ import 'package:image/image.dart' as img;
 import '../../../data/repositories/person_repositories.dart';
 import '../../../services/camera_service.dart';
 import '../../../services/face_recognition_service.dart';
+import '../../../utils/snackbar_helper.dart';
 
 class RecognitionController extends GetxController {
   // Services
@@ -350,59 +351,33 @@ class RecognitionController extends GetxController {
   // Switch camera (front/back) - ENHANCED with recognition restart
   Future<void> switchCamera() async {
     try {
-      print("🔄 RECOGNITION: switchCamera() called");
+      if (!isInitialized.value) return;
 
-      if (!isInitialized.value) {
-        print("🔄 RECOGNITION: Not initialized, skipping");
-        return;
-      }
-
-      // Stop detection first
       _stopDetection();
-
-      // Set loading state
       isInitialized(false);
 
-      print("🔄 RECOGNITION: Calling camera service switch...");
       final success = await _cameraService.switchCamera();
-      print("🔄 RECOGNITION: Switch result: $success");
 
       if (success) {
-        // Wait for camera to be fully ready
         await Future.delayed(Duration(milliseconds: 500));
-
-        // Update camera info
         _updateCameraInfo();
-
-        // Set initialized back to true
         isInitialized(true);
-
-        // Wait a bit more for UI to settle
         await Future.delayed(Duration(milliseconds: 200));
-
-        // Restart detection
         _startDetection();
 
-        print("🔄 RECOGNITION: Switch completed successfully");
-
-        Get.snackbar(
-          'Camera',
-          'Switched to ${_cameraService.getCameraInfo()}',
-          duration: Duration(seconds: 1),
-          snackPosition: SnackPosition.TOP,
-        );
+        // HAPUS snackbar - terlalu noisy untuk switch camera
+        // SnackbarHelper.showInfo('Camera switched');
       } else {
-        print("🔄 RECOGNITION: Switch failed, reverting...");
         isInitialized(true);
-        _startDetection(); // Resume with current camera
+        _startDetection();
 
-        errorMessage('Gagal mengganti kamera');
+        // Hanya tampilkan jika gagal - critical only
+        SnackbarHelper.showError('Failed to switch camera');
       }
     } catch (e) {
-      print("🔄 RECOGNITION: Switch error: $e");
       isInitialized(true);
       _startDetection();
-      errorMessage('Error switching camera: ${e.toString()}');
+      SnackbarHelper.showError('Camera switch error: ${e.toString()}');
     }
   }
 
@@ -420,19 +395,12 @@ class RecognitionController extends GetxController {
     isRecognitionEnabled(!isRecognitionEnabled.value);
 
     if (isDetecting.value) {
-      // Restart detection with new recognition settings
       _stopDetection();
       _startDetection();
     }
 
-    Get.snackbar(
-      'Recognition',
-      isRecognitionEnabled.value
-          ? 'Face recognition enabled'
-          : 'Face recognition disabled',
-      duration: Duration(seconds: 1),
-      snackPosition: SnackPosition.TOP,
-    );
+    // HAPUS snackbar - terlalu noisy
+    // User sudah bisa lihat dari icon yang berubah
   }
 
   // Get camera controller for preview
@@ -456,6 +424,17 @@ class RecognitionController extends GetxController {
     if (controller == null) return Size.zero;
     final previewSize = controller.value.previewSize;
     return Size(previewSize?.height ?? 0, previewSize?.width ?? 0);
+  }
+
+  // TAMBAH method untuk recognition success (new feature):
+  void _onPersonRecognized(String name, double confidence) {
+    // Hanya tampilkan untuk confidence tinggi
+    if (confidence >= 80.0) {
+      SnackbarHelper.showSuccess(
+        '$name recognized (${confidence.toStringAsFixed(0)}% confidence)',
+        title: 'Person Identified',
+      );
+    }
   }
 
   @override

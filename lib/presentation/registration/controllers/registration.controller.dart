@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../data/repositories/person_repositories.dart';
 import '../../../infrastructure/navigation/routes.dart';
 import '../../../services/face_recognition_service.dart';
+import '../../../utils/snackbar_helper.dart';
 
 class RegistrationController extends GetxController {
   final imagePicker = ImagePicker();
@@ -458,91 +459,71 @@ class RegistrationController extends GetxController {
           'croppedFaceImages': List<Uint8List>.from(croppedFaceImages),
           'onSaveCallback': (Map<int, String> savedNames) async {
             faceNames.assignAll(savedNames);
-            // Force update painter
             update();
 
-            //Save to database after UI update
             await savePersonsToDatabase();
-            Get.snackbar(
-              'Sukses',
-              'Nama wajah berhasil disimpan',
-              backgroundColor: Colors.green,
-              colorText: Colors.white,
-              duration: Duration(seconds: 3), // Diperpanjang untuk testing
-              snackPosition: SnackPosition.BOTTOM,
+
+            // UBAH dari Get.snackbar jadi:
+            SnackbarHelper.showSuccess(
+              'Face registration completed successfully',
+              title: 'Registration Complete',
             );
-            print("Success snackbar shown");
           },
           'onCancelCallback': (Map<int, String> currentNames) {
             faceNames.assignAll(currentNames);
-            update(); // Force update FacePainter
+            update();
           },
         },
       );
-      print("Navigation to FaceNamingScreen completed");
-    } else {
-      print("ERROR: faces is empty, cannot navigate");
     }
   }
 
+  // UBAH method savePersonsToDatabase():
   Future<void> savePersonsToDatabase() async {
-    if (faceNames.isEmpty) {
-      print("No face names to save");
-      return;
-    }
+    if (faceNames.isEmpty) return;
 
     try {
       isSavingToDatabase(true);
       isGeneratingEmbeddings(true);
       captureStatus('Generating embeddings...');
 
-      // Generate real embeddings untuk setiap wajah
       realEmbeddings.clear();
       for (int i = 0; i < faces.length; i++) {
         if (i < croppedFaceImages.length) {
           final embedding = await generateRealEmbedding(croppedFaceImages[i]);
           realEmbeddings.add(embedding);
-          print("Generated embedding for face ${i + 1}");
         }
       }
 
-      captureStatus('Menyimpan ke database...');
+      captureStatus('Saving to database...');
 
+      int savedCount = 0;
       for (int i = 0; i < faces.length; i++) {
         final name = faceNames[i];
         if (name != null && name.isNotEmpty && i < realEmbeddings.length) {
-          // Save to database dengan real embedding
-          final personId = await personRepository.savePerson(
+          await personRepository.savePerson(
             name: name,
             embedding: realEmbeddings[i],
             confidenceThreshold: 0.7,
           );
-
-          print("Person '$name' saved with real embedding (ID: $personId)");
+          savedCount++;
         }
       }
 
-      captureStatus('Berhasil disimpan ke database');
+      captureStatus('Successfully saved to database');
 
-      Get.snackbar(
-        'Database',
-        '${realEmbeddings.length} wajah berhasil disimpan dengan embedding',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        duration: Duration(seconds: 3),
-        snackPosition: SnackPosition.TOP,
+      // UBAH snackbar - hanya tampilkan yang penting:
+      SnackbarHelper.showSuccess(
+        '$savedCount face(s) registered successfully',
+        title: 'Database Updated',
       );
     } catch (e) {
-      print("Error saving to database: $e");
-      captureStatus('Gagal menyimpan ke database');
+      captureStatus('Failed to save to database');
 
-      Get.snackbar(
-        'Error Database',
-        'Gagal menyimpan: ${e.toString()}',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        duration: Duration(seconds: 3),
-        snackPosition: SnackPosition.TOP,
+      // Error snackbar dengan duration lebih lama:
+      SnackbarHelper.showError(
+        'Registration failed: ${e.toString()}',
+        title: 'Database Error',
       );
     } finally {
       isSavingToDatabase(false);
